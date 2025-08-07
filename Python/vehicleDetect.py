@@ -21,12 +21,8 @@
 import os
 import cv2
 import numpy as np
-import tensorflow as tf
 import time
-import pyautogui, sys
 import serial
-from utils import label_map_util
-from utils import visualization_utils as vis_util
 
 
 
@@ -285,202 +281,169 @@ def ledOnOff(state, inpSer):
 ######## START - MAIN FUNCTION #################################################
 ################################################################################
 
-# Define the directory containing the object detection model we're using
-MODEL_NAME = 'inference_graph'
-
-# Get path to the current working directory
-CWD_PATH = os.getcwd()
-
-# Path to frozen detection graph .pb file, which contains the model that is used
-# for object detection.
-PATH_TO_CKPT = os.path.join(CWD_PATH,MODEL_NAME,'frozen_inference_graph.pb')
-
-# Path to label map file
-PATH_TO_LABELS = os.path.join(CWD_PATH, 'label_map.pbtxt')
-
-# Number of classes the object detector can identify
-NUM_CLASSES = 1
-
-# Load the label map.
-# Label maps map indices to category names, so that when our convolution
-# network predicts `5`, we know that this corresponds to `king`.
-# Here we use internal utility functions, but anything that returns a
-# dictionary mapping integers to appropriate string labels would be fine
-label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
-categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes = NUM_CLASSES, use_display_name = True)
-category_index = label_map_util.create_category_index(categories)
-
-# Load the Tensorflow model into memory.
-detection_graph = tf.Graph()
-with detection_graph.as_default():
-    od_graph_def = tf.GraphDef()
-    with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
-        serialized_graph = fid.read()
-        od_graph_def.ParseFromString(serialized_graph)
-        tf.import_graph_def(od_graph_def, name='')
-
-    sess = tf.Session(graph=detection_graph)
-
-
-# Define input and output tensors (ie data) for the object detection classifier
-
-# Input tensor is the image
-image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
-
-# Output tensors are the detection boxes, scores, and classes
-# Each box represents a part of the image where a particular object was detected
-detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
-
-# Each score represents level of confidence for each of the objects.
-# The score is shown on the result image, together with the class label.
-detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
-detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
-
-# Number of objects detected
-num_detections = detection_graph.get_tensor_by_name('num_detections:0')
-
-# Define serial object and ports
-ser  = serial.Serial('COM3', 9600, timeout = 0)
-
-# Initialize webcam feed
-video = cv2.VideoCapture(0)
-
-while(True):
-
-    # Acquire frame and expand frame dimensions to have shape: [1, None, None, 3]
-    # i.e. a single-column array, where each item in the column has the pixel RGB value
-    ret, frame = video.read()
-    frame_expanded = np.expand_dims(frame, axis=0)
-
-    height, width = frame.shape[:2]
-
-    # Perform the actual detection by running the model with the image as input
-    (boxes, scores, classes, num) = sess.run(
-        [detection_boxes, detection_scores, detection_classes, num_detections],
-        feed_dict = {image_tensor: frame_expanded})
-
-
-    # Visualize the result
-    vis_util.visualize_boxes_and_labels_on_image_array(
-        frame,
-        np.squeeze(boxes),
-        np.squeeze(classes).astype(np.int32),
-        np.squeeze(scores),
-        category_index,
-        use_normalized_coordinates=True,
-        line_thickness=4,
-        min_score_thresh=0.40)
-
-
-    # Processing the detected vehicles
-    medX1 = None    # Variable for the position of first detected vehicle
-    medX2 = None    # Variable for the position of second detected vehicle
-    first = True    # Variable to turn False when the loop is entered 2nd time
-    final_score = np.squeeze(scores)
-    count = 0       # Variable to count the detected vehicles
-
-    ############################################################################
-    ### START - Loop to detect up to 100 vehicles per frame ####################
-    for i in range(100):
-        if scores is None or final_score[i] > 0.5:
-            #Determining bounding box coordinates
-            ymin = int((boxes[0][i][0] * height))
-            xmin = int((boxes[0][i][1] * width))
-            ymax = int((boxes[0][i][2] * height))
-            xmax = int((boxes[0][i][3] * width))
-
-            if first:       # If loop is entered for the first time
-                medX1 = (xmin + xmax) / 2
-                first = False
-                second = True
-
-            elif second:    # If loop is entered for the second time
-                medX2 = (xmin + xmax) / 2
-                second = False
-            count = count + 1
-    ### END - Loop to detect up to 100 vehicles per frame ######################
-    ############################################################################
-
-
-    # Print the positions and number of detected vehicles
-    print(medX1, ":", medX2)
-    print("Counted: ", count)
-
-    # If single vehicle is detected, call the drawCurtainSingle() function
-    if(count == 1):
-        drawCurtainSingle(frame, medX1, ser)
-
-    # If two vehicles are detected, call the drawCurtainDouble() function
-    elif(count == 2):
-        drawCurtainDouble(frame, medX1, medX2, ser)
-
-    # If more than 2 vehicles detected, turn all the LEDs OFF
-    elif(count > 2):
-        ledOnOff(0, ser)
-        print("More than two cars detected. High beams OFF.")
-
-    # If zero vehicles detected, turn all the LEDs ON
-    elif(count == 0):
-        ledOnOff(1, ser)
-        print("No cars detected. High beams ON.")
-
-
-    # Read the data which is sent from Arduino to double check
-    # what it actually received.
-    msg = ser.readline()
-    print("Arduino received: ", msg)
-
-
-    # Display the final image
-    cv2.imshow('Vehicle Detection at Night', frame)
-
-    # Press 'ENTER' to quit
-    if cv2.waitKey(1) == 13:
-        break
-################################################################################
-### END - Loop to play the input video #########################################
-
-# Clean up
-video.release()
-cv2.destroyAllWindows()
-
-################################################################################
-######## END - MAIN FUNCTION ###################################################
-################################################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-################################################################################
+def main():
+    import pyautogui, sys
+    import tensorflow as tf
+    from utils import label_map_util
+    from utils import visualization_utils as vis_util
+    # Define the directory containing the object detection model we're using
+    MODEL_NAME = 'inference_graph'
+
+    # Get path to the current working directory
+    CWD_PATH = os.getcwd()
+
+    # Path to frozen detection graph .pb file, which contains the model that is used
+    # for object detection.
+    PATH_TO_CKPT = os.path.join(CWD_PATH,MODEL_NAME,'frozen_inference_graph.pb')
+
+    # Path to label map file
+    PATH_TO_LABELS = os.path.join(CWD_PATH, 'label_map.pbtxt')
+
+    # Number of classes the object detector can identify
+    NUM_CLASSES = 1
+
+    # Load the label map.
+    # Label maps map indices to category names, so that when our convolution
+    # network predicts `5`, we know that this corresponds to `king`.
+    # Here we use internal utility functions, but anything that returns a
+    # dictionary mapping integers to appropriate string labels would be fine
+    label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
+    categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes = NUM_CLASSES, use_display_name = True)
+    category_index = label_map_util.create_category_index(categories)
+
+    # Load the Tensorflow model into memory.
+    detection_graph = tf.Graph()
+    with detection_graph.as_default():
+        od_graph_def = tf.GraphDef()
+        with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+            serialized_graph = fid.read()
+            od_graph_def.ParseFromString(serialized_graph)
+            tf.import_graph_def(od_graph_def, name='')
+
+        sess = tf.Session(graph=detection_graph)
+
+
+    # Define input and output tensors (ie data) for the object detection classifier
+
+    # Input tensor is the image
+    image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+
+    # Output tensors are the detection boxes, scores, and classes
+    # Each box represents a part of the image where a particular object was detected
+    detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+
+    # Each score represents level of confidence for each of the objects.
+    # The score is shown on the result image, together with the class label.
+    detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
+    detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
+
+    # Number of objects detected
+    num_detections = detection_graph.get_tensor_by_name('num_detections:0')
+
+    # Define serial object and ports
+    ser  = serial.Serial('COM3', 9600, timeout = 0)
+
+    # Initialize webcam feed
+    video = cv2.VideoCapture(0)
+
+    while(True):
+
+        # Acquire frame and expand frame dimensions to have shape: [1, None, None, 3]
+        # i.e. a single-column array, where each item in the column has the pixel RGB value
+        ret, frame = video.read()
+        frame_expanded = np.expand_dims(frame, axis=0)
+
+        height, width = frame.shape[:2]
+
+        # Perform the actual detection by running the model with the image as input
+        (boxes, scores, classes, num) = sess.run(
+            [detection_boxes, detection_scores, detection_classes, num_detections],
+            feed_dict = {image_tensor: frame_expanded})
+
+
+        # Visualize the result
+        vis_util.visualize_boxes_and_labels_on_image_array(
+            frame,
+            np.squeeze(boxes),
+            np.squeeze(classes).astype(np.int32),
+            np.squeeze(scores),
+            category_index,
+            use_normalized_coordinates=True,
+            line_thickness=4,
+            min_score_thresh=0.40)
+
+
+        # Processing the detected vehicles
+        medX1 = None    # Variable for the position of first detected vehicle
+        medX2 = None    # Variable for the position of second detected vehicle
+        first = True    # Variable to turn False when the loop is entered 2nd time
+        final_score = np.squeeze(scores)
+        count = 0       # Variable to count the detected vehicles
+
+        ############################################################################
+        ### START - Loop to detect up to 100 vehicles per frame ####################
+        for i in range(100):
+            if scores is None or final_score[i] > 0.5:
+                #Determining bounding box coordinates
+                ymin = int((boxes[0][i][0] * height))
+                xmin = int((boxes[0][i][1] * width))
+                ymax = int((boxes[0][i][2] * height))
+                xmax = int((boxes[0][i][3] * width))
+
+                if first:       # If loop is entered for the first time
+                    medX1 = (xmin + xmax) / 2
+                    first = False
+                    second = True
+
+                elif second:    # If loop is entered for the second time
+                    medX2 = (xmin + xmax) / 2
+                    second = False
+                count = count + 1
+        ### END - Loop to detect up to 100 vehicles per frame ######################
+        ############################################################################
+
+
+        # Print the positions and number of detected vehicles
+        print(medX1, ":", medX2)
+        print("Counted: ", count)
+
+        # If single vehicle is detected, call the drawCurtainSingle() function
+        if(count == 1):
+            drawCurtainSingle(frame, medX1, ser)
+
+        # If two vehicles are detected, call the drawCurtainDouble() function
+        elif(count == 2):
+            drawCurtainDouble(frame, medX1, medX2, ser)
+
+        # If more than 2 vehicles detected, turn all the LEDs OFF
+        elif(count > 2):
+            ledOnOff(0, ser)
+            print("More than two cars detected. High beams OFF.")
+
+        # If zero vehicles detected, turn all the LEDs ON
+        elif(count == 0):
+            ledOnOff(1, ser)
+            print("No cars detected. High beams ON.")
+
+
+        # Read the data which is sent from Arduino to double check
+        # what it actually received.
+        msg = ser.readline()
+        print("Arduino received: ", msg)
+
+
+        # Display the final image
+        cv2.imshow('Vehicle Detection at Night', frame)
+
+        # Press 'ENTER' to quit
+        if cv2.waitKey(1) == 13:
+            break
+    ################################################################################
+    ### END - Loop to play the input video #########################################
+
+    # Clean up
+    video.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
