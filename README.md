@@ -78,6 +78,36 @@ When the script is run, the LED matrix module will light up with a subtle animat
 
 ---
 
+## CMake Build System
+
+This repository now includes a CMake-based build system with compilable examples, similar to the CMSIS-DSP examples structure. The examples demonstrate the core algorithms used in the adaptive LED matrix system.
+
+### Quick Build
+
+```bash
+# Create build directory
+mkdir build && cd build
+
+# Configure and build
+cmake ..
+cmake --build .
+
+# Run examples
+./bin/led_pattern_simulator
+./bin/vehicle_position_calc
+./bin/serial_comm_test
+```
+
+### Available Examples
+
+1. **LED Pattern Simulator** - Visualizes LED matrix patterns for different vehicle detection scenarios
+2. **Vehicle Position Calculator** - Tests the position calculation algorithm from camera coordinates
+3. **Serial Communication Test** - Demonstrates the protocol between Python and Arduino components
+
+For detailed build instructions, see [README_BUILD.md](README_BUILD.md).
+
+---
+
 ## Important Notes
 It should be noted that this project is **only** a demonstration of how *I think* this technology works. It cannot by any means be used in production vehicles or other than educational purposes. The capabilities of this system is limited to my setup as of developing this project and was created with the sole purpose of self-improvement, educational applications and is a result of my personal interest in automotive technology, lighting technology as well as computer vision applications. Actual technology used in production vehicles makes use of much higher end hardware (i.e. ECU, camera) and is part of safety systems that must work with extremely low rates of error and with high precision.
 
